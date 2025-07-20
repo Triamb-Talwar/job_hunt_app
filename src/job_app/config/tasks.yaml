@@ -1,0 +1,99 @@
+job_search_task:
+  description: >
+    Search for 5 relevant jobs on platforms like LinkedIn, Indeed, Naukri, and RemoteOK based on the provided preferences:
+    - Fields: {{ fields }}
+    - Location: {{ location }}
+    - Only show jobs posted within the last {{ recency_days }} days
+
+    Extract and return job title, company, location, job description, and application URL for each listing.
+  expected_output: >
+    A list of relevant job listings in structured JSON format, with title, company, location, job description, and apply link.
+  agent: job_search_agent
+  output_file: output/job_listings.json
+
+# resume_tailoring_task:
+#   description: >
+#     You are given multiple base resumes for the same candidate, each emphasizing a different skill set (e.g., LLMs, AI, Full Stack).
+#     Based on the job description, use the DirectoryReadTool and FileReadTool to read and select the most relevant base resume.
+#     Do not modify the resume.
+#     Output only the filename of the selected resume that best matches the job description.
+#   expected_output: >
+#     A single string: the filename of the best-matching resume found in the input directory.
+#   agent: resume_tailor_agent
+#   context:
+#     - job_search_task
+#   output_file: output/selected_resume.json
+
+
+hr_contact_lookup_task:
+  description: >
+    For each job listing, try to find a real recruiter or hiring manager associated with that role.
+
+    Use only public information — infer the most likely person based on company name, job title, and job location. If you cannot find the exact recruiter, find a plausible LinkedIn contact with a title like "Recruiter", "Talent Acquisition", or "HR" from that company.
+
+    Output a structured contact object per job with:
+      - recruiter name (or "Not Found")
+      - title (e.g. "Technical Recruiter")
+      - LinkedIn URL (if any)
+      - email (realistic guess based on name + company domain, or "Not Found")
+
+    You may guess email using patterns like `firstname.lastname@company.com` or `firstinitiallastname@company.com` when full name + domain is known.
+
+  expected_output: >
+    JSON list where each job has: title, company, recruiter name, title, LinkedIn URL, and guessed or known email.
+  agent: hr_contact_agent
+  context:
+    - job_search_task
+  output_file: output/hr_contacts.json
+
+
+cold_email_task:
+  description: >
+    For each job listing and associated recruiter, generate a **personalized cold email**.
+
+    Use:
+      - The job title and company to show alignment
+      - The job description to highlight relevant experience
+      - The recruiter’s name and title (if available) to personalize
+      - The candidate’s name {name} to sign off
+
+    The email should:
+      - Be concise (≤150 words)
+      - Sound natural and human (avoid overly robotic or generic phrasing)
+      - Show clear enthusiasm for the specific role and company
+      - Mention resume availability *if applicable*
+
+    Output:
+      - `job_title`
+      - `company`
+      - `recruiter_name`
+      - `recruiter_email` (from hr_contact_lookup_task)
+      - `email_subject`
+      - `email_body`
+
+  input_vars:
+    - candidate_name
+
+  context:
+    - job_search_task
+    - hr_contact_lookup_task
+
+  expected_output: >
+    A structured JSON list of cold emails for each job-contact pair, including the full body, subject line, and mapping metadata (job, recruiter, email).
+
+  agent: cold_email_agent
+  output_file: output/cold_emails.json
+
+
+application_submission_task:
+  description: >
+    Apply to each job using the available application link or by sending the cold email to the HR contact.
+    Log the application status, method of application (web/email), result (success/failure), and timestamp.
+  agent: application_submitter_agent
+  context:
+    - job_search_task
+    - cold_email_task
+    - hr_contact_lookup_task
+  expected_output: >
+    A submission log containing job title, method of application (web/email), result (success/failure), and timestamp.
+  output_file: output/application_log.json
