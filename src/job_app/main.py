@@ -16,7 +16,7 @@ def run():
     inputs = {
         "fields": "AI Engineer, Full Stack Developer, LLM Researcher",
         "location": "India",
-        "recency_days": 7,
+        "recency_days": 1,
         "name": "Triamb Talwar"
     }
 
